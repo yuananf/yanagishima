@@ -1,33 +1,29 @@
 package yanagishima.server;
 
-import java.io.BufferedInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Arrays;
-import java.util.EnumSet;
-import java.util.Properties;
-
-import javax.servlet.DispatcherType;
-
-import joptsimple.OptionParser;
-import joptsimple.OptionSet;
-import joptsimple.OptionSpec;
-
-import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.servlet.DefaultServlet;
-import org.eclipse.jetty.servlet.ServletContextHandler;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import yanagishima.module.PrestoServiceModule;
-import yanagishima.module.PrestoServletModule;
-
 import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.servlet.GuiceFilter;
+import joptsimple.OptionParser;
+import joptsimple.OptionSet;
+import joptsimple.OptionSpec;
+import me.geso.tinyorm.TinyORM;
+import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.servlet.DefaultServlet;
+import org.eclipse.jetty.servlet.FilterHolder;
+import org.eclipse.jetty.servlet.ServletContextHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import yanagishima.filter.YanagishimaFilter;
+import yanagishima.module.*;
+
+import javax.servlet.DispatcherType;
+import java.io.*;
+import java.sql.Connection;
+import java.sql.Statement;
+import java.util.Arrays;
+import java.util.EnumSet;
+import java.util.Optional;
+import java.util.Properties;
 
 public class YanagishimaServer {
 
@@ -37,26 +33,38 @@ public class YanagishimaServer {
 	public static void main(String[] args) throws Exception {
 		
 		Properties properties = loadProps(args, new OptionParser());
-		int jettyPort = Integer.parseInt(properties.getProperty("jetty.port"));
+		int jettyPort = Integer.parseInt(Optional.ofNullable(properties.getProperty("jetty.port")).orElse("8080"));
 		String webResourceDir = properties.getProperty("web.resource.dir", "web");
-		String prestoCoordinatorServer = properties.getProperty("presto.coordinator.server");
-		String catalog = properties.getProperty("catalog");
-		String schema = properties.getProperty("schema");
-		String user = properties.getProperty("user");
-		String source = properties.getProperty("source");
-		int selectLimit = Integer.parseInt(properties.getProperty("select.limit"));
-		
-		PrestoServiceModule prestoServiceModule = new PrestoServiceModule(jettyPort, webResourceDir, prestoCoordinatorServer, catalog, schema, user, source, selectLimit);
+
+		PrestoServiceModule prestoServiceModule = new PrestoServiceModule(properties);
 		PrestoServletModule prestoServletModule = new PrestoServletModule();
+		HiveServiceModule hiveServiceModule = new HiveServiceModule(properties);
+		HiveServletModule hiveServletModule = new HiveServletModule();
+		DbModule dbModule = new DbModule();
+		PoolModule poolModule = new PoolModule();
+		ElasticsearchServiceModule elasticsearchServiceModule = new ElasticsearchServiceModule(properties);
+		ElasticsearchServletModule elasticsearchServletModule = new ElasticsearchServletModule();
 		@SuppressWarnings("unused")
 		Injector injector = Guice.createInjector(prestoServiceModule,
-				prestoServletModule);
+				prestoServletModule, hiveServiceModule, hiveServletModule, dbModule, poolModule, elasticsearchServiceModule, elasticsearchServletModule);
 
+		TinyORM tinyORM = injector.getInstance(TinyORM.class);
+		try(Connection connection = tinyORM.getConnection()) {
+			try(Statement statement = connection.createStatement()) {
+				statement.executeUpdate("create table if not exists query (datasource text, engine text, query_id text, fetch_result_time_string text, query_string text, user text, status text, elapsed_time_millis integer, result_file_size integer, linenumber integer, primary key(datasource, engine, query_id))");
+				statement.executeUpdate("create table if not exists publish (publish_id text, datasource text, engine text, query_id text, user text, primary key(publish_id))");
+				statement.executeUpdate("create table if not exists bookmark (bookmark_id integer primary key autoincrement, datasource text, engine text, query text, title text, user text)");
+				statement.executeUpdate("create table if not exists comment (datasource text, engine text, query_id text, content text, update_time_string text, user text, like_count integer, primary key(datasource, engine, query_id))");
+				statement.executeUpdate("create table if not exists label (datasource text, engine text, query_id text, label_name text, primary key(datasource, engine, query_id))");
+			}
+		}
 
 		Server server = new Server(jettyPort);
+		server.setAttribute("org.eclipse.jetty.server.Request.maxFormContentSize", -1);
 
 		ServletContextHandler servletContextHandler = new ServletContextHandler(
 				server, "/", ServletContextHandler.SESSIONS);
+		servletContextHandler.addFilter(new FilterHolder(new YanagishimaFilter(Boolean.parseBoolean(Optional.ofNullable(properties.getProperty("cors.enabled")).orElse("false")), properties.getProperty("audit.http.header.name"))), "/*", EnumSet.of(DispatcherType.REQUEST));
 		servletContextHandler.addFilter(GuiceFilter.class, "/*",
 				EnumSet.allOf(DispatcherType.class));
 

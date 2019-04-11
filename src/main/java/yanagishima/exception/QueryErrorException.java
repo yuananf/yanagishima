@@ -1,12 +1,14 @@
 package yanagishima.exception;
 
-import java.sql.SQLException;
-
 import com.facebook.presto.client.QueryError;
+
+import java.sql.SQLException;
 
 public class QueryErrorException extends Exception {
 
 	private static final long serialVersionUID = 1L;
+
+	private String queryId;
 	
 	private QueryError queryError;
 	
@@ -14,10 +16,13 @@ public class QueryErrorException extends Exception {
 		super(cause);
 	}
 	
-	public QueryErrorException(QueryError queryError, SQLException cause) {
+	public QueryErrorException(String queryId, QueryError queryError, SQLException cause) {
 		super(cause);
+		this.queryId = queryId;
 		this.queryError = queryError;
 	}
+
+	public String getQueryId() { return queryId; }
 
 	public QueryError getQueryError() {
 		return queryError;

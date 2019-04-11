@@ -1,5 +1,7 @@
 package yanagishima.result;
 
+import io.airlift.units.DataSize;
+
 import java.util.List;
 
 public class PrestoQueryResult {
@@ -8,9 +10,15 @@ public class PrestoQueryResult {
 	
 	private List<String> columns;
 	
-	private List<List<Object>> records;
+	private List<List<String>> records;
 	
 	private String warningMessage;
+
+	private String queryId;
+
+	private int lineNumber;
+
+	private DataSize rawDataSize;
 
 	public String getUpdateType() {
 		return updateType;
@@ -28,11 +36,11 @@ public class PrestoQueryResult {
 		this.columns = columns;
 	}
 
-	public List<List<Object>> getRecords() {
+	public List<List<String>> getRecords() {
 		return records;
 	}
 
-	public void setRecords(List<List<Object>> records) {
+	public void setRecords(List<List<String>> records) {
 		this.records = records;
 	}
 
@@ -42,6 +50,26 @@ public class PrestoQueryResult {
 
 	public void setWarningMessage(String warningMessage) {
 		this.warningMessage = warningMessage;
+	}
+
+	public String getQueryId() { return queryId; }
+
+	public void setQueryId(String queryId) { this.queryId = queryId; }
+
+	public int getLineNumber() {
+		return lineNumber;
+	}
+
+	public void setLineNumber(int lineNumber) {
+		this.lineNumber = lineNumber;
+	}
+
+	public DataSize getRawDataSize() {
+		return rawDataSize;
+	}
+
+	public void setRawDataSize(DataSize rawDataSize) {
+		this.rawDataSize = rawDataSize;
 	}
 
 }

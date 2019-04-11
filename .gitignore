@@ -1,6 +1,13 @@
 /bin
-build/
+/build
 .settings/
 .project
 .classpath
 .gradle/
+.idea/
+yanagishima.iml
+data/yanagishima.db
+yanagishima.log
+web/node_modules/
+/result
+out/
